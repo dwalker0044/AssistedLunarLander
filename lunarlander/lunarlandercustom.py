@@ -10,6 +10,7 @@ class LunarLanderCustom(LunarLander):
     def __init__(self):
         super().__init__()
         self.prev_shaping = None
+        self.prev_vy = 0.0
 
     def step(self, action: Union[np.ndarray, Iterable, int, float]):
         if self.continuous:
@@ -76,12 +77,13 @@ class LunarLanderCustom(LunarLander):
             self.lander.angle,
             20.0 * self.lander.angularVelocity / FPS,
             1.0 if self.legs[0].ground_contact else 0.0,
-            1.0 if self.legs[1].ground_contact else 0.0
+            1.0 if self.legs[1].ground_contact else 0.0,
         ]
+        self.prev_vy = vel.y
         assert len(state) == 8
 
-        done, reward = self.calculate_reward(state, m_power, s_power)
-        return np.array(state, dtype=np.float32), reward, done, {}
+        done, reward, descent_reward = self.calculate_reward(state, m_power, s_power)
+        return np.array(state, dtype=np.float32), (reward, descent_reward), done, {}
 
     def calculate_reward(self, state, m_power, s_power):
         reward = 0
@@ -100,12 +102,44 @@ class LunarLanderCustom(LunarLander):
         reward -= m_power * 0.30
         reward -= s_power * 0.03
 
+        # Velocity should reduce as you approach the surface.
+        # If you are far away, maximum reward is achieved simply by going down.
+        a = (state[3] - self.prev_vy) * (VIEWPORT_H / SCALE / 2) / FPS
+
+        descent_reward = 0
+
+        if state[1] < 1.3:
+            descent_reward += (1 - np.abs(state[0])) * 2
+
+            # If you de-accelerate, get reward.
+            # if a < 0:
+            #     descent_reward += 1
+            if state[1] < 1 and state[3] < 0.4:
+                descent_reward += (1 - np.abs(state[3]))
+
+            # The nearer you get to surface, get more reward.
+            # descent_reward += (1 - state[1]) * 0.5
+
+            # If moving slowly, get reward.
+            # if state[3] > -0.5 and state[3] < 0:
+            #     descent_reward += 1
+            #
+            # if state[3] > -0.3 and state[3] < 0:
+            #     descent_reward += 2
+            #
+            # if state[3] > -0.1 and state[3] < 0:
+            #     descent_reward += 4
+
         done = False
         if self.game_over or abs(state[0]) >= 1.0:
             done = True
             reward = -100
+            descent_reward = 0
         if not self.lander.awake:
             done = True
             reward = +100
+            descent_reward = 0
+        if self.legs[0].ground_contact or self.legs[1].ground_contact:
+            descent_reward = 0
 
-        return done, reward
+        return done, reward, descent_reward

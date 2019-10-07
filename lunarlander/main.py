@@ -10,9 +10,9 @@ ALPHA = 0.1
 GAMMA = 0.6
 
 # Total number of episodes to train for.
-NUM_EPISODES = 2000
+NUM_EPISODES = 1000
 # Displays animation once per one hundred episodes.
-RENDER_ANIMATION = False
+RENDER_ANIMATION = True
 
 from lunarlandercustom import LunarLanderCustom
 from qtablediscrete import QTable1dDiscrete
